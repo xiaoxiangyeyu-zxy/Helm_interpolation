@@ -11,6 +11,9 @@ den = 1e04
 abar = 4.0
 zbar = 2.0
 ye = abar/zbar
+print('The temperature is:', "%e" % btemp)
+print('The density is:', "%e" % den)
+print('den*abar/zbar=', "%e" % (den*ye))
 
 # temp 10**4---10**11   den 10**(-10)---10**11
 eos_tlo = 4.e0
@@ -268,4 +271,88 @@ fi[33] = eos_fddtt[iat + 1, jat]
 fi[34] = eos_fddtt[iat, jat + 1]
 fi[35] = eos_fddtt[iat + 1, jat + 1]
 
+# various differences
+xt = max((btemp - eos_t[jat])*eos_dtInv[jat], 0.0e0)
+xd = max((din - eos_d[iat]) * eos_ddInv[iat], 0.0e0)
+mxt = 1.0e0 - xt
+mxd = 1.0e0 - xd
 
+# the density and temperature basis functions
+si0t = psi0(xt)
+si1t = psi1(xt) * eos_dt[jat]
+si2t = psi2(xt) * eos_dtSqr[jat]
+
+si0mt = psi0(mxt)
+si1mt = -psi1(mxt) * eos_dt[jat]
+si2mt = psi2(mxt) * eos_dtSqr[jat]
+
+si0d = psi0(xd)
+si1d = psi1(xd) * eos_dd[iat]
+si2d = psi2(xd) * eos_ddSqr[iat]
+
+si0md = psi0(mxd)
+si1md = -psi1(mxd) * eos_dd[iat]
+si2md = psi2(mxd) * eos_ddSqr[iat]
+
+# the first derivatives of the basis functions
+dsi0t = dpsi0(xt) * eos_dtInv[jat]
+dsi1t = dpsi1(xt)
+dsi2t = dpsi2(xt) * eos_dt[jat]
+
+dsi0mt = -dpsi0(mxt) * eos_dtInv[jat]
+dsi1mt = dpsi1(mxt)
+dsi2mt = -dpsi2(mxt) * eos_dt[jat]
+
+dsi0d = dpsi0(xd) * eos_ddInv[iat]
+dsi1d = dpsi1(xd)
+dsi2d = dpsi2(xd) * eos_dd[iat]
+
+dsi0md = -dpsi0(mxd) * eos_ddInv[iat]
+dsi1md = dpsi1(mxd)
+dsi2md = -dpsi2(mxd) * eos_dd[iat]
+
+# the second derivatives of the basis functions
+ddsi0t = ddpsi0(xt) * eos_dtSqrInv[jat]
+ddsi1t = ddpsi1(xt) * eos_dtInv[jat]
+ddsi2t = ddpsi2(xt)
+
+ddsi0mt = ddpsi0(mxt) * eos_dtSqrInv[jat]
+ddsi1mt = -ddpsi1(mxt) * eos_dtInv[jat]
+ddsi2mt = ddpsi2(mxt)
+
+
+# the free energy
+free = h5(si0t, si1t, si2t, si0mt, si1mt, si2mt, si0d, si1d, si2d, si0md, si1md, si2md)
+print('The free energy is:', '%.16e' % free)
+
+# derivative with respect to density
+df_d = h5(si0t, si1t, si2t, si0mt, si1mt, si2mt, dsi0d, dsi1d, dsi2d, dsi0md, dsi1md, dsi2md)
+
+# derivative with respect to temperature
+df_t = h5(dsi0t, dsi1t, dsi2t, dsi0mt, dsi1mt, dsi2mt, si0d, si1d, si2d, si0md, si1md, si2md)
+
+# second derivative with respect to temperature
+df_tt = h5(ddsi0t, ddsi1t, ddsi2t, ddsi0mt, ddsi1mt, ddsi2mt, si0d, si1d, si2d, si0md, si1md, si2md)
+
+# second derivative with respect to temperature and density
+df_dt = h5(dsi0t, dsi1t, dsi2t, dsi0mt, dsi1mt, dsi2mt, dsi0d, dsi1d, dsi2d, dsi0md, dsi1md, dsi2md)
+
+# df_dd = h5(si0t, si1t, si2t, si0mt, si1mt, si2mt, ddsi0d, ddsi1d, ddsi2d, ddsi0md, ddsi1md, ddsi2md)
+
+# the desired electron - positron thermodynamic quantities
+x3 = din * din
+pele = x3 * df_d  # pressure p
+dpepdt = x3 * df_dt  # dp/dt
+# dpepdd = ye * (din**2 * df_dd + 2.0d0 * din * df_d)
+
+sele = -df_t * ye  # entropy s
+dsepdt = -df_tt * ye  # ds/dt
+dsepdd = -df_dt * ye * ye  # ds/dd
+
+eele = ye * free + btemp * sele  # internal energy e
+deepdt = btemp * dsepdt  # de/dt
+deepdd = ye * ye * df_d + btemp * dsepdd  # de/dd
+
+print('The presssure is:', '%.16e' % pele)
+print('The entropy is:', '%.16e' % sele)
+print('The internal energy is:', '%.16e' % eele)
